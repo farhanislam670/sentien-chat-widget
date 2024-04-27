@@ -9,12 +9,12 @@ import {
 
 class MessageWidget {
   constructor(position = "bottom-right", organizationId = 1) {
+    this.organizationId = organizationId;
     this.position = this.getPosition(position);
     this.open = false;
     this.initialize();
     this.injectStyles();
     this.chatHistory = [];
-    this.organizationId = organizationId;
   }
 
   position = "";
@@ -90,11 +90,13 @@ class MessageWidget {
       /**
        * Generate threadId
        */
-      threadId = await this.generateThread();
+      const threadId = await this.generateThread();
 
       // Add event listener for form submission
       const formElement = this.widgetContainer.querySelector("form");
-      formElement.addEventListener("submit", this.sendMessage.bind(this));
+      formElement.addEventListener("submit", (event) =>
+        this.sendMessage(event, threadId)
+      );
     } catch (error) {
       console.error("Error initializing widget:", error);
     }
@@ -110,7 +112,7 @@ class MessageWidget {
     });
   }
 
-  async generateThread() {
+  generateThread = async () => {
     try {
       const response = await fetch(
         "https://sentien-rag-app.onrender.com/threads/",
@@ -134,15 +136,15 @@ class MessageWidget {
       console.log(data);
 
       // Extract thread_id from the JSON response
-      const thread_id = data.id;
+      const threadId = data.id;
 
       // Return thread_id
-      return thread_id;
+      return threadId;
     } catch (error) {
       console.error("Error:", error);
       return null; // Return null in case of error
     }
-  }
+  };
 
   createWidgetContent() {
     // Render textarea
@@ -173,7 +175,7 @@ class MessageWidget {
     }
   }
 
-  async sendMessage(event) {
+  async sendMessage(event, threadId) {
     event.preventDefault();
 
     const formData = new FormData(event.target);
@@ -200,33 +202,41 @@ class MessageWidget {
       textarea.disabled = true;
     }
 
+    console.log({
+      organization_id: this.organizationId,
+      thread_id: threadId,
+      message: message,
+    });
+
     try {
-      const response = fetch("https://sentien-rag-app.onrender.com/chat/", {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          organization_id: this.organizationId,
-          thread_id: threadId,
-          message: message,
-        }),
-      })
-        .then((response) => response.json())
-        .then((data) => console.log(data))
-        .catch((error) => console.error("Error:", error));
+      const response = await fetch(
+        "https://sentien-rag-app.onrender.com/chat/",
+        {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            organization_id: this.organizationId,
+            thread_id: threadId,
+            message: message,
+          }),
+        }
+      );
+
+      const responseData = await response.json();
+
+      console.log(responseData);
 
       if (!response.ok) {
         throw new Error("Failed to send message");
       }
 
-      const responseData = await response.json();
-
       // Handle the response asynchronously
       await this.handleResponse(responseData);
     } catch (error) {
-      console.error("Error:", error.message);
+      console.error("Error:", error);
     } finally {
       // Re-enable textarea after response handling
       if (textarea) {
